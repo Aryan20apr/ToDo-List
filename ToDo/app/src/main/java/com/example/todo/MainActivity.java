@@ -1,10 +1,13 @@
 package com.example.todo;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.Observer;
 import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.room.Database;
 
 import android.content.Intent;
 import android.os.Bundle;
@@ -38,7 +41,7 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.ItemC
         // Initialize the adapter and attach it to the RecyclerView
         mAdapter = new TaskAdapter(this, this);
         mRecyclerView.setAdapter(mAdapter);
-        Log.e("MainActivity", "In onCreate() of MainActivity");
+        Log.d("MainActivity", "In onCreate() of MainActivity");
         DividerItemDecoration decoration = new DividerItemDecoration(getApplicationContext(), DividerItemDecoration.VERTICAL);
         mRecyclerView.addItemDecoration(decoration);
                 /*
@@ -69,7 +72,9 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.ItemC
                         mDb.taskDao().deleteTask((tasks.get(position)));
                         //Call retrieveTasks method to refresh th UI
                         //For that we will need to load that task from the db again exactly as done by the onResume method
-                        retrieveTasks();
+                        /**Every change in our database will trigger onChanged method of the observer
+                        *Therefore we will not need to call the retrieveTask method after deleting a task.*/
+                       // retrieveTasks();
                     }
                 });
             }
@@ -93,6 +98,9 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.ItemC
         });
         //Initialize member variable for the database
         mDb = AppDatabase.getInstance(getApplicationContext());
+
+        // COMPLETED (7) Call retrieveTasks from here and remove the onResume method
+        retrieveTasks();
     }
 
     /**
@@ -100,7 +108,7 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.ItemC
      * Often, this is after new data has been inserted through an AddTaskActivity,
      * so this re-queries the database data for any changes.
      */
-    @Override
+   /* @Override
     protected void onResume() {
         //Call the Adapter's setTasks method using the result of the loadAllTasks method from the taskDao
         super.onResume();
@@ -111,31 +119,60 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.ItemC
 
         //Call the Adapter's setTasks method using the result of the loadAllTasks method from the taskDao--Used before using executors
     //mAdapter.setTasks(mDb.taskDao().loadAllTasks());
-}
+}*/
 
     private void retrieveTasks() {
-        //Execute a new runnable that will query the database to retrieve a list of task entry objects
-        AppExecutors.getInstance().diskIO().execute(new Runnable() {
+//        //Execute a new runnable that will query the database to retrieve a list of task entry objects
+//        AppExecutors.getInstance().diskIO().execute(new Runnable() {
+//            @Override
+//            public void run() {
+//
+//                // COMPLETED (6) Move the logic into the run method and
+//                // Extract the list of tasks to a final variable
+//                //wrapping the return type with LiveData
+//                final LiveData<List<TaskEntry>> tasks = mDb.taskDao().loadAllTasks();
+//                //Passing list to the adapter via the settasks method cannot be done from the thread
+//                //in our diskIO executor.Therefore we need to wrap it inside a run on UI thread method call.
+//
+//                // COMPLETED (7) Wrap the setTask call in a call to runOnUiThread
+//                // We will be able to simplify this once we learn more
+//                // about Android Architecture Components
+//                runOnUiThread(new Runnable() {
+//                    @Override
+//                    public void run() {
+//                        mAdapter.setTasks(tasks);
+//                    }
+//                });
+//            }
+//        });
+        Log.d(TAG,"Actively retrieving the tasks from the Database ");
+        //wrapping the return type with LiveData
+        // COMPLETED (4) Extract all this logic outside the Executor and remove the Executor
+        // COMPLETED (3) Fix compile issue by wrapping the return type with LiveData
+        final LiveData<List<TaskEntry>> tasks = mDb.taskDao().loadAllTasks();
+        //Calling observe method of tasks which is of type LiveData
+        tasks.observe(this, new Observer<List<TaskEntry>>() {
             @Override
-            public void run() {
-
-                // COMPLETED (6) Move the logic into the run method and
-                // Extract the list of tasks to a final variable
-                final List<TaskEntry> tasks = mDb.taskDao().loadAllTasks();
-                //Passing list to the adapter via the settasks method cannot be done from the thread
-                //in our diskIO executor.Therefore we need to wrap it inside a run on UI thread method call.
-
-                // COMPLETED (7) Wrap the setTask call in a call to runOnUiThread
-                // We will be able to simplify this once we learn more
-                // about Android Architecture Components
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        mAdapter.setTasks(tasks);
-                    }
-                });
+            public void onChanged(List<TaskEntry> taskEntries)//taskEntries is same thing we are wrapping in our LiveData object
+             {
+                 Log.d(TAG,"Receiving database update from LiveData");
+                //This method can access the views so we can use it for the logic that we currently have on the run on UI thread method which we can delete now.(commented below)
+                 mAdapter.setTasks(taskEntries);//Update the adapter
+                 //We are getting the LiveData object and call its observe method.
+                 //This happens out of the main thread by default as we are using LiveData, so we do not need executor
+                 //We have the logic to update the Ui in the onChanged method of the observer which
+                 // runs on the main thread by default
             }
-        });
+        });//Lifecycle owner is something that has a lifecycle.In our case it is the activity
+//        // COMPLETED (7) Wrap the setTask call in a call to runOnUiThread
+////                // We will be able to simplify this once we learn more
+////                // about Android Architecture Components
+//                runOnUiThread(new Runnable() {
+//                    @Override
+//                    public void run() {
+//                        mAdapter.setTasks(tasks);
+//                    }
+//                });
     }
     //For updating the tasks
     //Put item id in the intent and query the database to get that task once receive AddTaskActivity

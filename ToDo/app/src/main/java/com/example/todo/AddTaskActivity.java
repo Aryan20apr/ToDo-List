@@ -1,9 +1,12 @@
 package com.example.todo;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.Observer;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -54,6 +57,7 @@ public class AddTaskActivity extends AppCompatActivity {
             Intent intent = getIntent();
             if (intent != null && intent.hasExtra(EXTRA_TASK_ID)) {
                 mButton.setText(R.string.update_button);
+                Log.e("AddTaskActivity", "Task has been clicked to update");
                 if (mTaskId == DEFAULT_TASK_ID) {
                     // populate the UI
                     //Assign the value of EXTRA_TASK_ID in the intent to mTaskId
@@ -61,12 +65,13 @@ public class AddTaskActivity extends AppCompatActivity {
                     mTaskId = intent.getIntExtra(EXTRA_TASK_ID, DEFAULT_TASK_ID);
                     // COMPLETED (4) Get the diskIO Executor from the instance of AppExecutors and
                     // call the diskIO execute method with a new Runnable and implement its run method
-                    AppExecutors.getInstance().diskIO().execute(new Runnable() {
+                    /*AppExecutors.getInstance().diskIO().execute(new Runnable() {
                         @Override
                         public void run() {
                             // COMPLETED (5) Use the loadTaskById method to retrieve the task with id mTaskId and
                             // assign its value to a final TaskEntry variable
-                            final TaskEntry task = mDb.taskDao().loadTaskById(mTaskId);
+                            //wrapping the return type with LiveData
+                            final LiveData<TaskEntry> task = mDb.taskDao().loadTaskById(mTaskId);
                             // COMPLETED (6) Call the populateUI method with the retrieve tasks
                             // Remember to wrap it in a call to runOnUiThread as we cannot populate UI on this thread
                             // We will be able to simplify this once we learn more
@@ -77,6 +82,20 @@ public class AddTaskActivity extends AppCompatActivity {
                                     populateUI(task);
                                 }
                             });
+                        }
+                    });*/
+                    //As LiveData run of the main thread we can delete executors
+                    //wrapping the return type with LiveData
+                    final LiveData<TaskEntry> task = mDb.taskDao().loadTaskById(mTaskId);
+                    task.observe(this, new Observer<TaskEntry>() {
+                        @Override
+                        public void onChanged(TaskEntry taskEntry) {
+                            //In this case we do not want to receive updates so we need to remove the observer
+                            //from the LiveData object
+                            task.removeObserver(this);
+                            Log.e(TAG,"Receiving database update from LiveData");
+                            populateUI(taskEntry);
+
                         }
                     });
                 }
